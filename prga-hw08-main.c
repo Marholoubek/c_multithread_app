@@ -153,8 +153,26 @@ void* input_thread_kb(void *arg){
 void* input_thread_pipe(void *arg){
     return NULL;
 }
+
 void* output_thread(void *arg){
-    return NULL;
+    data_t *data = (data_t*) arg;
+    static int ret = 0;
+
+    pthread_mutex_lock(&mtx);
+    bool q = data->quit;
+    pthread_mutex_unlock(&mtx);
+
+    while (!q){
+        pthread_mutex_lock(&mtx);
+        pthread_cond_wait(&cond, &mtx);
+        printf("\rLED %3s send: '%c' received: '%c', T = %4d ms, ticker = %4d", data->led ? "On" : "Off", data->send_char, data->received_char, data->alarm_period, data->alarm_counter);
+        fflush(stdout);
+        q = data->quit;
+        pthread_mutex_unlock(&mtx);
+    }
+
+    return &ret;
+
 }
 void* alarm_thread(void *arg){
     return NULL;
