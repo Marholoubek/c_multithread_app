@@ -18,17 +18,24 @@ As first pipe, specify the one that's used as the module output pipe. After that
 Example of program configuration.
 
 $ mkfifo my_fifo_in
+
 $ mkfifo my_fifo_out
+
 $ ./prga-hw08-module my_fifo_out my_fifo_in
+
 $ ./prga-hw08-main my_fifo_out my_fifo_in
 
 Now you can use the implemened commands.
 
 
 's' - Led On
+
 'e' - Led Off
+
 'h' - Saying 'Hello'
+
 'b' - Saying 'Bey' and quiting the program
+
 '1'-'5' - Setting the period of led flashing
 
 
