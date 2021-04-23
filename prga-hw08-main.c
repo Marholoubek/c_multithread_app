@@ -151,7 +151,35 @@ void* input_thread_kb(void *arg){
     return &ret;
 }
 void* input_thread_pipe(void *arg){
-    return NULL;
+    data_t *data = (data_t*) arg;
+    static int ret = 0;
+
+    pthread_mutex_lock(&mtx);
+    bool q = data->quit;
+    pthread_mutex_unlock(&mtx);
+    int c;
+
+    while (!q && (c = io_getc(data->in_pipe) != -1)){
+        pthread_mutex_lock(&mtx);
+        switch (c) {
+            case 'b':
+                data->quit = true;
+                break;
+            case 'x':
+                data->led = true;
+                data->alarm_counter++;
+                break;
+            case 'o':
+                data->led = false;
+                data->alarm_counter++;
+                break;
+        }
+        data->received_char = c;
+        pthread_cond_signal(&cond);
+        pthread_mutex_unlock(&mtx);
+    }
+
+    return &ret;
 }
 
 void* output_thread(void *arg){
