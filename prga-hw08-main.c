@@ -15,12 +15,13 @@
 
 #include "prg_io_nonblock.h"
 
-#define PERIOD_STEP 10
-#define PERIOD_MAX 2000
-#define PERIOD_MIN 10
-#define PERIOD_START 100
 #define ASCII_1 49
 #define READ_TIMEOUT_MS 10
+
+#ifndef PERIOD_SEC
+#define PERIOD_SEC 5
+#endif
+
 
 typedef struct {
     int alarm_period;
@@ -54,7 +55,7 @@ int main(int argc, char *argv[]){
                   .send_char = ' ',
                   .received_char = '?',
                   .led = false,
-                  .alarm_period = PERIOD_START,
+                  .alarm_period = 0,
                   .alarm_counter = 0
     };
 
@@ -148,10 +149,13 @@ void* input_thread_kb(void *arg){
             default: // discard all other keys
                 break;
         }
+        if (c == 'b'){
+            fprintf(stderr, "quit\n");
+            data->quit = true;
+        }
         q = data->quit;
         pthread_mutex_unlock(&mtx);
     }
-    pthread_cond_signal(&cond);
     return &ret;
 }
 void* input_thread_pipe(void *arg){
@@ -186,7 +190,6 @@ void* input_thread_pipe(void *arg){
                     } else if (data->send_char == 'e') {
                         data->led = false;
                     }
-
             }
             data->received_char = c;
             pthread_cond_signal(&cond);
@@ -209,9 +212,9 @@ void* output_thread(void *arg){
 
     while (!q){
         pthread_mutex_lock(&mtx);
-        printf("\rLED %3s send: '%c' received: '%c', T = %4d ms, ticker = %4d", data->led ? "On" : "Off", data->send_char, data->received_char, data->alarm_period, data->alarm_counter);
+        printf("\rLED %3s send: '%c' received: '%c', T = %4d ms, ticker = %4d", data->led ? "On" : "Off", data->send_char, data->received_char, data->alarm_period, data->alarm_counter / 2);
         fflush(stdout);
-         pthread_cond_wait(&cond, &mtx);
+        pthread_cond_wait(&cond, &mtx);
         q = data->quit;
         pthread_mutex_unlock(&mtx);
     }
@@ -222,16 +225,19 @@ void* output_thread(void *arg){
 void* alarm_thread(void *arg){
     data_t *data = (data_t*) arg;
     static int ret = 0;
-    int period = 500 * 1000;
 
     pthread_mutex_lock(&mtx);
     bool q = data->quit;
     pthread_mutex_unlock(&mtx);
 
     while (!q){
-        usleep(period);
+        sleep(PERIOD_SEC);
         pthread_mutex_lock(&mtx);
-        data->alarm_period = period / 1000 / data->alarm_counter;
+        if (data->alarm_counter > 0){
+            data->alarm_period = (PERIOD_SEC * 1000 / data->alarm_counter);
+        } else {
+            data->alarm_period = 0;
+        }
         data->alarm_counter = 0;
         q = data->quit;
         pthread_mutex_unlock(&mtx);
