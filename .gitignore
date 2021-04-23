@@ -1,0 +1,12 @@
+.DS_Store
+.idea/
+CMakeLists.txt
+Makefile
+binaries/
+cmake-build-debug/
+create_pipes.sh
+prga-hw08-module
+prga-hw08-main
+prg_io_nonblock.c
+prg_io_nonblock.h
+
