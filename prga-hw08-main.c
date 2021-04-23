@@ -20,6 +20,7 @@
 #define PERIOD_MIN 10
 #define PERIOD_START 100
 #define ASCII_1 49
+#define READ_TIMEOUT_MS 10
 
 typedef struct {
     int alarm_period;
@@ -122,13 +123,16 @@ void call_termios(int reset){
 void* input_thread_kb(void *arg){
     int c;
     static int ret = 0;
-    int period_steps[5] = {50, 100, 200, 500, 1000};
     data_t *data = (data_t*) arg;
-    while (!data->quit && (c = getchar()) != EOF) {
+
+    pthread_mutex_lock(&mtx);
+    bool q = data->quit;
+    pthread_mutex_unlock(&mtx);
+
+    while (!q && (c = getchar()) != EOF) {
         pthread_mutex_lock(&mtx);
         switch(c) {
             case '1': case '2': case '3': case '4': case '5':
-                data->alarm_period = period_steps[c - ASCII_1];
             case 's': case 'e': case 'b': case 'h': case 'i':
                 if (io_putc(data->out_pipe, c) != 1) {
                     fprintf(stderr, "ERROR: Cannot send command to module, exit program\n");
@@ -144,10 +148,10 @@ void* input_thread_kb(void *arg){
             default: // discard all other keys
                 break;
         }
+        q = data->quit;
         pthread_mutex_unlock(&mtx);
     }
-    ret = 1;
-
+    pthread_cond_signal(&cond);
     return &ret;
 }
 void* input_thread_pipe(void *arg){
@@ -157,26 +161,39 @@ void* input_thread_pipe(void *arg){
     pthread_mutex_lock(&mtx);
     bool q = data->quit;
     pthread_mutex_unlock(&mtx);
-    int c;
+    unsigned char c;
 
-    while (!q && (c = io_getc(data->in_pipe) != -1)){
+    while (!q){
+        int r = io_getc_timeout(data->in_pipe, READ_TIMEOUT_MS, &c);
+
         pthread_mutex_lock(&mtx);
-        switch (c) {
-            case 'b':
-                data->quit = true;
-                break;
-            case 'x':
-                data->led = true;
-                data->alarm_counter++;
-                break;
-            case 'o':
-                data->led = false;
-                data->alarm_counter++;
-                break;
+        if (r > 0) {
+            switch (c) {
+                case 'b':
+                    data->quit = true;
+                    break;
+                case 'x':
+                    data->led = true;
+                    data->alarm_counter++;
+                    break;
+                case 'o':
+                    data->led = false;
+                    data->alarm_counter++;
+                    break;
+                case 'a':
+                    if (data->send_char == 's'){
+                        data->led = true;
+                    } else if (data->send_char == 'e') {
+                        data->led = false;
+                    }
+
+            }
+            data->received_char = c;
+            pthread_cond_signal(&cond);
         }
-        data->received_char = c;
-        pthread_cond_signal(&cond);
+        q = data->quit;
         pthread_mutex_unlock(&mtx);
+
     }
 
     return &ret;
@@ -192,9 +209,9 @@ void* output_thread(void *arg){
 
     while (!q){
         pthread_mutex_lock(&mtx);
-        pthread_cond_wait(&cond, &mtx);
         printf("\rLED %3s send: '%c' received: '%c', T = %4d ms, ticker = %4d", data->led ? "On" : "Off", data->send_char, data->received_char, data->alarm_period, data->alarm_counter);
         fflush(stdout);
+         pthread_cond_wait(&cond, &mtx);
         q = data->quit;
         pthread_mutex_unlock(&mtx);
     }
@@ -203,7 +220,25 @@ void* output_thread(void *arg){
 
 }
 void* alarm_thread(void *arg){
-    return NULL;
+    data_t *data = (data_t*) arg;
+    static int ret = 0;
+    int period = 500 * 1000;
+
+    pthread_mutex_lock(&mtx);
+    bool q = data->quit;
+    pthread_mutex_unlock(&mtx);
+
+    while (!q){
+        usleep(period);
+        pthread_mutex_lock(&mtx);
+        data->alarm_period = period / 1000 / data->alarm_counter;
+        data->alarm_counter = 0;
+        q = data->quit;
+        pthread_mutex_unlock(&mtx);
+
+    }
+
+    return &ret;
 }
 
 
