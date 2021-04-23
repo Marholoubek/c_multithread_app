@@ -9,4 +9,8 @@ prga-hw08-module
 prga-hw08-main
 prg_io_nonblock.c
 prg_io_nonblock.h
+prg_io_nonblock.o
+prga-hw08-main.o
+
+
 
