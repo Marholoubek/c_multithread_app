@@ -1,7 +1,7 @@
 /*
  * Filename: prga-hw08-main.c
- * Date:     2019/12/25 22:57
- * Author:   Jan Faigl
+ * Date:     2020/04/23 22:57
+ * Author:   Martin Holoubek
  */
 
 #include <stdio.h>
@@ -10,12 +10,10 @@
  
 #include <termios.h> 
 #include <unistd.h>  // for STDIN_FILENO
- 
 #include <pthread.h>
 
 #include "prg_io_nonblock.h"
 
-#define ASCII_1 49
 #define READ_TIMEOUT_MS 10
 
 #ifndef PERIOD_SEC
@@ -39,8 +37,6 @@ pthread_cond_t cond;
 
 void call_termios(int reset);
 
-// Vlakna
-
 void* input_thread_kb(void*);
 void* input_thread_pipe(void*);
 void* output_thread(void*);
@@ -49,14 +45,15 @@ void* alarm_thread(void*);
  
 int main(int argc, char *argv[]){
 
-    data_t data = { .quit = false,
-                  .in_pipe = -1,
-                  .out_pipe = -1,
-                  .send_char = ' ',
-                  .received_char = '?',
-                  .led = false,
-                  .alarm_period = 0,
-                  .alarm_counter = 0
+    data_t data = {
+        .quit = false,
+        .in_pipe = -1,
+        .out_pipe = -1,
+        .send_char = ' ',
+        .received_char = '?',
+        .led = false,
+        .alarm_period = 0,
+        .alarm_counter = 0
     };
 
     const char *in = argc > 1 ? argv[1] : "/tmp/prga-hw08.out";
@@ -149,7 +146,6 @@ void* input_thread_kb(void *arg){
             default: // discard all other keys
                 break;
         }
-        if (c == 'b') data->quit = true;
         q = data->quit;
         pthread_mutex_unlock(&mtx);
         pthread_cond_signal(&cond);
@@ -172,6 +168,9 @@ void* input_thread_pipe(void *arg){
         if (r > 0) {
             switch (c) {
                 case 'b':
+                    data->alarm_period = 0;
+                    data->alarm_counter = 0;
+                    data->led = false
                     data->quit = true;
                     break;
                 case 'x':
@@ -185,8 +184,12 @@ void* input_thread_pipe(void *arg){
                 case 'a':
                     if (data->send_char == 's'){
                         data->led = true;
+                        data->alarm_period = 0;
+                        data->alarm_counter = 0;
                     } else if (data->send_char == 'e') {
                         data->led = false;
+                        data->alarm_period = 0;
+                        data->alarm_counter = 0;
                     }
             }
             data->received_char = c;
@@ -212,8 +215,8 @@ void* output_thread(void *arg){
         pthread_mutex_lock(&mtx);
         printf("\rLED %3s send: '%c' received: '%c', T = %4d ms, ticker = %4d", data->led ? "On" : "Off", data->send_char, data->received_char, data->alarm_period, data->alarm_counter / 2);
         fflush(stdout);
-        pthread_cond_wait(&cond, &mtx);
         q = data->quit;
+        pthread_cond_wait(&cond, &mtx);
         pthread_mutex_unlock(&mtx);
     }
 
