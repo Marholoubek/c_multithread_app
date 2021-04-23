@@ -149,12 +149,10 @@ void* input_thread_kb(void *arg){
             default: // discard all other keys
                 break;
         }
-        if (c == 'b'){
-            fprintf(stderr, "quit\n");
-            data->quit = true;
-        }
+        if (c == 'b') data->quit = true;
         q = data->quit;
         pthread_mutex_unlock(&mtx);
+        pthread_cond_signal(&cond);
     }
     return &ret;
 }
